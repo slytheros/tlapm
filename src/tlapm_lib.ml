@@ -610,36 +610,11 @@ let setup_loader fs loader_paths =
 let cli_instance_targets modules =
   let targets = ref (Sm.fold
       (fun name _ names -> Ss.add name names) Module.Standard.initctx Ss.empty) in
-  let visitor = object (self)
-    inherit [unit] Proof.Visit.iter as proof_super
-    inherit [unit] Expr.Visit.iter_concrete as expr_super
-    method step scx st =
-      let open Expr.T in
-      let stepnm = Proof.T.string_of_stepno
-          (Property.get st Proof.T.Props.step) in
-      let adj_step scx =
-        Expr.Visit.adj scx
-          (Defn (Operator (stepnm @@ st, At false @@ nowhere) @@ st,
-                 Proof Always, Visible, Local) @@ st) in
-      match st.core with
-      | Proof.T.TakeTuply bs ->
-          let scx = self#tuply_bounds scx bs in
-          let scx = Proof.Visit.bump scx 1 in
-          let scx = adj_step scx in
-          Proof.Visit.bump scx 1
-      | Proof.T.PickTuply (bs, expr, prf) ->
-          self#proof scx prf;
-          let () =
-            let scx = self#tuply_bounds scx bs in
-            self#expr scx expr in
-          let scx = adj_step scx in
-          let scx = Proof.Visit.bump scx 1 in
-          let scx = self#tuply_bounds scx bs in
-          Proof.Visit.bump scx 4
-      | _ -> proof_super#step scx st
+  let visitor = object
+    inherit [unit] Proof.Visit.iter_concrete as super
     method instance scx inst =
       targets := Ss.add inst.Expr.T.inst_mod !targets;
-      expr_super#instance scx inst
+      super#instance scx inst
   end in
   let empty = ((), Deque.empty) in
   let rec visit_module m =
