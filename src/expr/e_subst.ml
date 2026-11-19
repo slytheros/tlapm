@@ -27,13 +27,24 @@ let bumpn n = function
 
 let bump s = bumpn 1 s
 
+let with_index expr n =
+  match expr.core with
+  | Ix old when old = n -> expr
+  | _ -> Ix n @@ expr
+
 let rec app_expr s oe = match oe.core with
   | ( Internal _ | Opaque _ | String _ | Num _ | At _ ) ->
       oe
   | Ix n ->
-      app_ix s (n @@ oe)
+      app_index s oe n
   | Apply (op, fs) ->
-      normalize (app_expr s op) (app_exprs s fs) @@ oe
+      let args = app_exprs s fs in
+      let operator = app_expr s op in
+      begin match operator.core, args with
+      | (Lambda _ | Apply _), _ | _, [] -> normalize operator args @@ oe
+      | _ when operator == op && args == fs -> oe
+      | _ -> Apply (operator, args) @@ oe
+      end
   | Bang (e, sels) ->
       Bang (app_expr s e, List.map (app_sel s) sels) @@ oe
   | Lambda (vs, e) ->
@@ -48,7 +59,8 @@ let rec app_expr s oe = match oe.core with
   | If (e, f, g) ->
       If (app_expr s e, app_expr s f, app_expr s g) @@ oe
   | List (q, es) ->
-      List (q, app_exprs s es) @@ oe
+      let args = app_exprs s es in
+      if args == es then oe else List (q, args) @@ oe
   | Quant (q, bs, e) ->
       let (s, bs) = app_bounds s bs in
       Quant (q, bs, app_expr s e) @@ oe
@@ -99,8 +111,16 @@ let rec app_expr s oe = match oe.core with
   | SetOfTuply _
   | FcnTuply _ -> assert false
 
-and app_exprs s es =
-  List.map (fun e -> app_expr s e) es
+and app_exprs s = function
+  | [] -> []
+  | [x] as original ->
+      let x' = app_expr s x in
+      if x' == x then original else [x']
+  | [x; y] as original ->
+      let x' = app_expr s x in
+      let y' = app_expr s y in
+      if x' == x && y' == y then original else [x'; y']
+  | es -> List.map (fun e -> app_expr s e) es
 
 and normalize ?(cx = Deque.empty) op args = match op.core with
   | Lambda (vs, e) ->
@@ -157,17 +177,16 @@ and app_x s (trail, res) =
                | Except_apply e -> Except_apply (app_expr s e)) trail,
    app_expr s res)
 
-(* [PERF] this is the hottest function in the PM (ignoring GC) *)
-and app_ix s n = match s with
-  | Shift m -> Ix (m + n.core) @@ n
-  | Cons (op, _) when n.core = 1 -> op.core @@ n  (* app_ix Cons(op, s) (1 @@ oe) = op.core @@ oe *)
-  | Cons (_, s) -> app_ix s (n.core - 1 @@ n)  (* app_ix Cons(op, s) (i @@ oe) = app_ix s ((i - 1) @@ oe) *)
-  | Compose (ss, tt) -> app_expr ss (app_ix tt n)
-    (* `app_ix` returns `Ix` so could call `app_ix` directly,
-    instead of `app_expr` *)
-  | Bump (k, ss) when n.core <= k -> Ix n.core @@ n
-  | Bump (k, ss) -> app_expr (Shift k) (app_ix ss (n.core - k @@ n))
-    (* could call `app_ix` directly, instead of `app_expr` *)
+(* Carry the original properties once while walking the substitution. *)
+and app_index s original n = match s with
+  | Shift m -> with_index original (n + m)
+  | Cons (op, _) when n = 1 -> op.core @@ original
+  | Cons (_, tail) -> app_index tail original (n - 1)
+  | Compose (outer, inner) -> app_expr outer (app_index inner original n)
+  | Bump (k, _) when n <= k -> with_index original n
+  | Bump (_, Shift m) -> with_index original (n + m)
+  | Bump (k, inner) ->
+      app_expr (Shift k) (app_index inner original (n - k))
 
 and app_defn s d =
   { d with core = app_defn_ s d.core }
@@ -210,6 +229,20 @@ and app_hyp s h = match h.core with
 and app_dom s = function
   | Unbounded -> Unbounded
   | Bounded (dom, vis) -> Bounded (app_expr s dom, vis)
+
+let app_ix s n = app_index s (Ix n.core @@ n) n.core
+
+let%test "substitution preserves bound indices and shifts outer indices" =
+  let bound = noprops (Ix 1) in
+  let substitution = bump (shift 2) in
+  app_expr substitution bound == bound &&
+  (app_expr substitution (noprops (Ix 2))).core = Ix 4
+
+let%test "substitution still normalizes a higher-order application" =
+  let expression = noprops (Apply (noprops (Ix 1), [noprops (Ix 2)])) in
+  let parameter = (noprops "x", Shape_expr) in
+  let operator = noprops (Lambda ([parameter], noprops (Ix 1))) in
+  (app_expr (scons operator (shift 0)) expression).core = Ix 1
 
 let rec app_spine s = function
   | [] -> []
@@ -272,7 +305,7 @@ class map = object (self : 'self)
 
   method expr (s: sub) (oe: E_t.expr): expr = match oe.core with
     | Ix n ->
-        app_ix s (n @@ oe)
+        app_index s oe n
     | Internal b ->
         Internal b @@ oe
     | Opaque o ->

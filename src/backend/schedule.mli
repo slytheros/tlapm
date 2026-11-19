@@ -48,9 +48,11 @@ and result =
   | Stopped_timeout
 
 
-val run: int -> task list -> unit
+val run: ?propagate_exit:bool -> int -> task list -> unit
 (* [run max_threads tasks]
 Run the tasks described by [tasks],
 launching at most [max_threads]
 simultatenous processes.
+By default, Exit aborts the schedule and is consumed.  With [propagate_exit],
+re-raise it after the same zombie harvesting so a serial caller also stops.
 *)

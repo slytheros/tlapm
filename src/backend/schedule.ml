@@ -110,7 +110,7 @@ let kill_and_start_next now reason d =
    Note that this uses lists and is inefficient if there are
    many processes.  Optimize it if you have max_threads > 100.
 *)
-let run max_threads tl =
+let run ?(propagate_exit=false) max_threads tl =
   assert (max_threads >= 1);
   assert (max_threads < 100);
   let rec spin running tl =
@@ -183,4 +183,5 @@ let run max_threads tl =
     spin [] tl;
     System.harvest_zombies ()
   with Exit ->
-    System.harvest_zombies ()
+    System.harvest_zombies ();
+    if propagate_exit then raise Exit
