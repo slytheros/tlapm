@@ -121,28 +121,29 @@ let rec nth ?(backwards=false) q n =
     in
     git q n
 
-let rec first_n q n =
-    (* Return the first `n` elements of the queue `q`. *)
-    if (n < 0) then
+let first_n q n =
+    let length = size q in
+    if n < 0 then
         failwith (Printf.sprintf "Deque.first_n:  n = %d < 0" n);
-    if (n > (size q)) then
-        failwith (Printf.sprintf "Deque.first_n:  n = %d > size q = %d" n (size q));
-    let rec f q n =
-        assert (n <= size q);
-        assert (n >= 0);
-        match n with
-        | 0 -> empty
-        | _ -> begin match front q with
-            | None -> assert false
-            | Some (x, q) ->
-                let r = f q (n - 1) in
-                cons x r
-            end
-    in
-    (* TODO: move this unit test *)
-    (* assert ((size (f empty 0)) == 0); *)
-    f q n
-
+    if n > length then
+        failwith (Printf.sprintf "Deque.first_n:  n = %d > size q = %d" n length);
+    if n = 0 then empty
+    else if n = length then q
+    else if n >= q.flen then
+        (* The discarded suffix is a prefix of the reversed rear list. *)
+        let rec drop count = function
+          | xs when count = 0 -> xs
+          | _ :: xs -> drop (count - 1) xs
+          | [] -> assert false
+        in
+        { q with rear = drop (length - n) q.rear; rlen = n - q.flen }
+    else
+        let rec take count = function
+          | _ when count = 0 -> []
+          | x :: xs -> x :: take (count - 1) xs
+          | [] -> assert false
+        in
+        { empty with front = take n q.front; flen = n }
 
 let map f q =
   let rec go n q r = match front q with
@@ -223,3 +224,13 @@ let equal cmp q1 q2 =
     | Some lf, Some lr -> List.for_all2 cmp lf (List.rev lr)
     | _, _ -> false
   end
+
+let%test "first_n preserves order across the front and rear lists" =
+  let q = snoc (snoc (of_list [1; 2]) 3) 4 in
+  let check n expected =
+    let prefix = first_n q n in
+    let flat = of_list expected in
+    to_list prefix = expected && equal (=) prefix flat && equal (=) flat prefix
+  in
+  check 0 [] && check 1 [1] && check 2 [1; 2] &&
+  check 3 [1; 2; 3] && check 4 [1; 2; 3; 4]

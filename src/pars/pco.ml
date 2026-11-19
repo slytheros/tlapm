@@ -648,7 +648,6 @@ module Make (Tok : Intf.Tok) (Prec : Intf.Prec) = struct
 
   let resolve (item_prs : bool -> ('s, 'a item list) prs) : ('s, 'a) prs =
     let exception Reduce_one_exn in
-    let exception Ambiguous_exn of string * string in
     let rec next stack startp =
       attempt (item_prs startp >>+ decide_fork stack) <|> use (lazy (finish stack))
 
@@ -656,7 +655,7 @@ module Make (Tok : Intf.Tok) (Prec : Intf.Prec) = struct
       | [item] -> decide stack (item, loc)
       | _ -> choice (List.map (fun item -> decide stack (item, loc)) items)
 
-    and decide stack (item, loc) = try match item with
+    and decide stack (item, loc) = match item with
       | Atm _ | Opr (_, _, Prefix _) -> begin
           match stack with
             | (Atm _, _) :: _ ->
@@ -670,17 +669,17 @@ module Make (Tok : Intf.Tok) (Prec : Intf.Prec) = struct
                   end
                 end
         end
-      | Opr (oprec, name, Infix (oass, _)) -> begin
+      | Opr (oprec, _, Infix (oass, _)) -> begin
+          (* Match the legacy TLAPM grouping for overlapping intervals.
+             A left-associative infix reduces a preceding left-associative
+             infix once; a prefix with an overlapping interval stays pending. *)
           let rec normalize stack = match stack with
             | (Atm _, _) :: (Opr (pprec, _, _), _) :: _
                 when below oprec pprec ->
                 normalize (reduce_one stack)
-            | (Atm _, _) :: (Opr (_, pname, Infix _), _) :: _
-                when oass <> Non && pname = name ->
-                if oass = Left then reduce_one stack else stack
-            | (Atm _, _) :: (Opr (pprec, pname, _), _) :: _
-                when conflict oprec pprec ->
-                raise (Ambiguous_exn (pname, name))
+            | (Atm _, _) :: (Opr (pprec, _, Infix (Left, _)), _) :: _
+                when oass = Left && not (below pprec oprec) ->
+                reduce_one stack
             | _ -> stack
           in
           let stack = normalize stack in
@@ -692,13 +691,10 @@ module Make (Tok : Intf.Tok) (Prec : Intf.Prec) = struct
               | [] ->
                   fail "insufficient arguments"
         end
-      | Opr (oprec, name, Postfix _) -> begin
+      | Opr (oprec, _, Postfix _) -> begin
           let rec normalize stack = match stack with
             | (Atm _, _) :: (Opr (pprec, _, _), _) :: _ when below oprec pprec ->
                 normalize (reduce_one stack)
-            | (Atm _, _) :: (Opr (pprec, pname, _), _) :: _
-                when conflict oprec pprec ->
-                raise (Ambiguous_exn (pname, name))
             | _ -> stack
           in
           let stack = normalize stack in
@@ -710,12 +706,6 @@ module Make (Tok : Intf.Tok) (Prec : Intf.Prec) = struct
               | [] ->
                   fail "insufficient arguments"
         end
-      with Ambiguous_exn (pname, name) -> ambiguous pname name
-
-    and ambiguous pname name =
-      commit (fail ("ambiguous expression: operators " ^ pname ^ " and " ^ name
-        ^ " have conflicting precedence; use parentheses"))
-
     and reduce_one = function
       | (Opr (_, _, Postfix px), oloc)
         :: (Atm a, aloc)

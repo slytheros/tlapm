@@ -1805,9 +1805,19 @@ let ship ob fpout thyout record =
         record true ob;
         Schedule.Immediate true
       end else begin
-        let (p1, expand_success) = Lazy.force p in
+        let use_literal_true =
+          ob.kind = Ob_support &&
+          trying_to_prove_true ob.obl.core.active.core &&
+          not (!Params.toolbox && !Params.printallobs) &&
+          not !Params.check &&
+          not (expand_enabled || expand_cdot || autouse || apply_lambdify ||
+               enabled_axioms || level_comparison)
+        in
+        (* The triviality check can use an already literal goal when neither
+           proof diagnostics nor the selected method need the normalized form. *)
+        let (p1, expand_success) = if use_literal_true then (ob, true) else Lazy.force p in
         let normalize_expand_ob = lazy p1 in
-        (* Note: triviality check must be done after expanding definitions *)
+        (* Other support goals may only become trivial after expansion. *)
         let trivial_ob =
             try
                 lazy (trivial (Lazy.force normalize_expand_ob))

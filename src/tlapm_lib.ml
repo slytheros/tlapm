@@ -229,6 +229,19 @@ let process_obs
     let fpout = Fpfile.fp_init fpf !modules_list in
     let thyout = Isabelle.thy_init modname thyf in
     let _ = Errors.get_warnings () in
+    if !Params.max_threads = 1 then begin
+        (* Keep only one prepared obligation alive in the scheduler.  Preserve
+           the original array for the complete result summary below. *)
+        try
+            Array.iter
+                (fun ob ->
+                    if Toolbox.is_stopped () || Backend.Interrupted.is_interrupted ()
+                    then raise Exit;
+                    let task = Prep.make_task fpout thyout record ob in
+                    Schedule.run ~propagate_exit:true 1 [task])
+                obs
+        with Exit -> ()
+    end else begin
     (* prepare proof tasks *)
     let tasks =
         try
@@ -237,7 +250,8 @@ let process_obs
         with Exit -> []
     in
     (* proving *)
-    Schedule.run !Params.max_threads tasks;
+    Schedule.run !Params.max_threads tasks
+    end;
     Isabelle.thy_close thyf thyout;
     (* close fingerprints file *)
     Fpfile.fp_close_and_consolidate fpf fpout;
@@ -589,6 +603,49 @@ let setup_loader fs loader_paths =
   let loader_paths = List.fold_left add_if_new loader_paths fs in
   Loader.Global.setup loader_paths
 
+(* The CLI has already flattened every EXTENDS consumer before processing any
+   module.  Only INSTANCE creation subsequently reads module bodies from mcx.
+   Keep every possible instancee, including references in original proofs and
+   cached-module syntax.  An incomplete analysis disables retirement entirely. *)
+let cli_instance_targets modules =
+  let targets = ref (Sm.fold
+      (fun name _ names -> Ss.add name names) Module.Standard.initctx Ss.empty) in
+  let visitor = object
+    inherit [unit] Proof.Visit.iter_concrete as super
+    method instance scx inst =
+      targets := Ss.add inst.Expr.T.inst_mod !targets;
+      super#instance scx inst
+  end in
+  let empty = ((), Deque.empty) in
+  let rec visit_module m =
+    List.iter visit_unit m.core.body;
+    match m.core.stage with
+    | Special | Flat -> ()
+    | Parsed -> failwith "CLI retention analysis requires flattened modules"
+    | Final fin ->
+        List.iter visit_unit fin.final_named;
+        Array.iter (fun ob ->
+            ignore (visitor#sequent empty ob.Proof.T.obl.core)) fin.final_obs
+  and visit_unit mu =
+    match mu.core with
+    | Constants _ | Recursives _ | Variables _ -> ()
+    | Definition (df, _, _, _) -> ignore (visitor#defn empty df)
+    | Axiom (_, expr) -> visitor#expr empty expr
+    | Theorem (_, sq, _, proof, original_proof, _) ->
+        let scx = visitor#sequent empty sq in
+        visitor#proof scx proof;
+        visitor#proof scx original_proof
+    | Submod m -> visit_module m
+    | Mutate (_, usable) -> visitor#usable empty usable
+    | Anoninst (inst, _) -> visitor#instance empty inst
+  in
+  try
+    List.iter visit_module modules;
+    Some !targets
+  with
+  | (Exit | Sys.Break | Out_of_memory) as error -> raise error
+  | _ -> None
+
 let main fs =
   let () =
     List.iter begin
@@ -635,10 +692,15 @@ let main fs =
     let mcx = Module.Save.complete_load ~clock:Clocks.parsing mcx in
     (* flatten the modules *)
     let (mcx, mods) = Module.Dep.schedule mcx in
+    let instance_targets = cli_instance_targets mods in
       let f mcx m =
         (* processing the proofs in the commandline modules *)
         let (mcx, m) = process_module mcx m in
-        Sm.add m.core.name.core m mcx
+        let mcx = Sm.add m.core.name.core m mcx in
+        match instance_targets with
+        | Some targets when not (Ss.mem m.core.name.core targets) ->
+            Sm.remove m.core.name.core mcx
+        | _ -> mcx
       in
       ignore (List.fold_left f mcx mods)
   end ;
