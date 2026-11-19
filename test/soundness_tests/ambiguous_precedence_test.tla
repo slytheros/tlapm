@@ -1,17 +1,14 @@
 ------------- MODULE ambiguous_precedence_test --------------
 
-\* https://github.com/tlaplus/rfcs/issues/28
-\* Intended (TRUE)
-\* {} \notin ((SUBSET {}) \cap {})
-\* Legacy (FALSE)
-\* {} \notin (SUBSET ({} \cap {}))
+EXTENDS TLAPS
 
+\* The explicitly grouped assumption is true, so this theorem is false.
 THEOREM
-  ASSUME {} \notin SUBSET {} \cap {}
+  ASSUME {} \notin ((SUBSET {}) \cap {})
   PROVE FALSE
-OBVIOUS
+BY SMT
 
 =============================================================
-result: 3
-stderr: ambiguous expression: operators SUBSET and \\cap have conflicting precedence; use parentheses
+result: 0
+stderr: @!!status:failed
 nostderr: @!!status:proved

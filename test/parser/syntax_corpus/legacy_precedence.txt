@@ -1,0 +1,455 @@
+=============|||
+Legacy precedence: {} \in SUBSET {} \cap {}
+:equiv
+=============|||
+
+---- MODULE Precedence ----
+Actual == {} \in SUBSET {} \cap {}
+Reference == {} \in (SUBSET ({} \cap {}))
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: DOMAIN A .. B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == DOMAIN A .. B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A = B = C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A = B = C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A = B # C
+:equiv
+=============|||
+
+---- MODULE Precedence ----
+Actual == A = B # C
+Reference == A = (B # C)
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A => B => C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A => B => C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A ^ B ^ C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A ^ B ^ C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A / B / C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A / B / C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A % B % C
+:equiv
+=============|||
+
+---- MODULE Precedence ----
+Actual == A % B % C
+Reference == (A % B) % C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A * B / C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A * B / C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A / B * C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A / B * C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A /\ B \/ C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A /\ B \/ C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A \/ B /\ C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A \/ B /\ C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A \cap B \cup C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A \cap B \cup C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A \cup B \cap C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A \cup B \cap C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A + B ++ C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A + B ++ C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A $ B + C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A $ B + C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A + B $ C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A + B $ C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A $ B $$ C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A $ B $$ C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A $ B ^ C + D
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A $ B ^ C + D
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: A \cdot B = C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A \cdot B = C
+====
+
+-------------|||
+
+=============|||
+Touching precedence ranges: A \cdot B ^ C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A \cdot B ^ C
+====
+
+-------------|||
+
+=============|||
+Touching precedence ranges: A ^ B \cdot C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A ^ B \cdot C
+====
+
+-------------|||
+
+=============|||
+Touching precedence ranges: A * B $ C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A * B $ C
+====
+
+-------------|||
+
+=============|||
+Touching precedence ranges: A $ B * C
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == A $ B * C
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: [] A = B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == [] A = B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: <> A = B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == <> A = B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: ENABLED A = B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == ENABLED A = B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: UNCHANGED A = B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == UNCHANGED A = B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: ENABLED A'
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == ENABLED A'
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: UNCHANGED A'
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == UNCHANGED A'
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: [] A'
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == [] A'
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: <> A'
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == <> A'
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: -A $ B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == -A $ B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: SUBSET A \cap B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == SUBSET A \cap B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: SUBSET A \cup B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == SUBSET A \cup B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: SUBSET A \ B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == SUBSET A \ B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: UNION A \cap B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == UNION A \cap B
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: UNION A \cup B
+:equiv
+=============|||
+
+---- MODULE Precedence ----
+Actual == UNION A \cup B
+Reference == UNION (A \cup B)
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: UNION A \ B
+:accept
+=============|||
+
+---- MODULE Precedence ----
+Result == UNION A \ B
+====
+
+-------------|||
+
+=============|||
+Incomplete expression has a distinct diagnostic
+:error incomplete expression
+=============|||
+
+---- MODULE Precedence ----
+Result == A =
+====
+
+-------------|||
+
+=============|||
+Legacy precedence: infix UNION followed by another infix
+:equiv
+=============|||
+
+---- MODULE Precedence ----
+Actual == A \cup UNION B \cup C
+Reference == A \cup (UNION (B \cup C))
+====
+
+-------------|||
