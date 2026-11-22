@@ -40,3 +40,36 @@ Check if an understandable error is reported if an operator is called with wrong
   > EOF
   File "test_bad_op.tla", line 3, characters 7-16:
   Error: Invalid number of arguments
+
+Compact Toolbox output retains the normalized attempt and terminal status.
+  $ cat > Compact.tla <<'EOF'
+  > ---- MODULE Compact ----
+  > CONSTANT x
+  > THEOREM x = x OBVIOUS
+  > ====
+  > EOF
+  $ tlapm --strict --nofp --threads 1 --method smt --toolbox-compact Compact.tla </dev/null >stdout 2>stderr
+  $ grep -E '^@!!(status|obl):' stderr
+  @!!status:to be proved
+  @!!obl:
+  @!!status:normalized
+  @!!obl:
+  @!!status:proved
+  @!!obl:
+  $ grep -F 'All 1 obligation proved' stderr
+  [INFO]: All 1 obligation proved.
+
+A definition can instantiate an inner module before any theorem in its scope.
+  $ cat > LocalInstance.tla <<'EOF'
+  > ---- MODULE LocalInstance ----
+  > ---- MODULE Inner ----
+  > A == TRUE
+  > THEOREM TRUE OBVIOUS
+  > ====
+  > ViaLet == LET M == INSTANCE Inner IN M!A
+  > THEOREM ViaLet BY DEF ViaLet
+  > ====
+  > EOF
+  $ tlapm --strict --nofp --threads 1 LocalInstance.tla >stdout 2>stderr
+  $ grep -F 'All 2 obligations proved' stderr
+  [INFO]: All 2 obligations proved.

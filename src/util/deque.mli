@@ -22,6 +22,10 @@ val iter  : (int -> 'a -> unit) -> 'a dq -> unit
 
 val find  : ?backwards:bool -> 'a dq -> ('a -> bool) -> (int * 'a) option
 
+val shared_prefix_length : 'a dq -> 'a dq -> int
+(** Length of a physically shared prefix. May omit equal elements stored in
+    different lists. *)
+
 val alter : ?backwards:bool -> 'a dq -> int -> ('a -> 'a) -> 'a dq
 
 val fold_left  : ('acc -> 'a -> 'acc) -> 'acc -> 'a dq -> 'acc

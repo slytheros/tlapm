@@ -59,6 +59,10 @@ module Clocks = struct
     end (List.tl clocks);
     Util.printf "(* %s-+--------------- *)" (String.make max_desc_width '-');
     Util.printf "(* %s  *)" (string_of_clock (List.hd clocks));
+    Util.printf "(* Interaction detail (cumulative seconds, prover attempts may overlap) *)";
+    List.iter (fun clock ->
+        Util.printf "(* %s | %.6f *)" clock.desc clock.time)
+      [Timing.preparation; Timing.encoding; Timing.prover]
 
 end
 

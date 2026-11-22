@@ -25,6 +25,19 @@ let new_clock desc = { desc = desc ;
                        time = 0.0 ;
                        count = 0 }
 
+let preparation = new_clock "preparation"
+let encoding = new_clock "backend encoding"
+let prover = new_clock "prover attempts"
+
+let record clock elapsed =
+  clock.time <- clock.time +. elapsed;
+  clock.count <- clock.count + 1
+
+let measure clock f x =
+  let started = start_timer () in
+  Fun.protect ~finally:(fun () -> record clock (get_timer started))
+    (fun () -> f x)
+
 let ambient = new_clock "other"
 
 let beginning_of_the_world = Unix.gettimeofday ()
