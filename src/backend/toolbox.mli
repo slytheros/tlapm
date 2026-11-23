@@ -10,6 +10,8 @@ val get_kills: unit -> int list
 (** Look in standard input for KILL instructions from the toolbox, return
     the list of corresponding task numbers.
 *)
+val accepts_commands : unit -> bool
+(** Whether the scheduler should still poll Toolbox standard input. *)
 
 (* backend/isabelle.ml *)
 val toolbox_print:

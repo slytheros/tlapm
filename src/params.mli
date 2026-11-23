@@ -5,6 +5,7 @@
 (* pars/error.ml *)
 val toolbox: bool ref
 val toolbox_vsn: int ref
+val toolbox_compact: bool ref
 val use_stdin: bool ref
 val prefer_stdlib: bool ref
 type parser = | Tlapm | Sany

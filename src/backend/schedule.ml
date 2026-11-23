@@ -96,7 +96,9 @@ let kill_process now reason d =
     System.kill_tree d.pid
   end;
   close d.ofd;
-  d.dc reason (now -. d.start_time)
+  let elapsed = now -. d.start_time in
+  if !Params.stats then Timing.record Timing.prover elapsed;
+  d.dc reason elapsed
 
 
 let kill_and_start_next now reason d =
@@ -145,8 +147,9 @@ let run ?(propagate_exit=false) max_threads tl =
       (* Finally, call select and treat the outputs and deadlines. *)
       let outs = List.map (fun x -> x.ofd) running in
       let delay = max 0.0 (min (dl -. Unix.gettimeofday ()) 60.0) in
-      let outs = if !Params.toolbox then Unix.stdin :: outs else outs in
+      let outs = if Toolbox.accepts_commands () then Unix.stdin :: outs else outs in
       let (ready, _, _) = Unix.select outs [] [] delay in
+      let now = Unix.gettimeofday () in
 
       (* outputs *)
       let f d =

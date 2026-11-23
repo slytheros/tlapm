@@ -202,6 +202,8 @@ let init ?(out=Format.std_formatter) ?(err=Format.err_formatter) ?(terminate=exi
                  "<int><int> toolbox mode";
     "--toolbox-vsn", (Arg.Int set_toolbox_vsn),
                      "<int> Toolbox protocol version, 1|2, 1 by default.";
+    "--toolbox-compact", Arg.Unit (fun () -> toolbox := true; toolbox_compact := true),
+                         " emit Toolbox attempt metadata without successful obligation text";
     "--line", Arg.Int set_target_line,
               "<int> line to prove";
     "--wait", Arg.Set_int wait,

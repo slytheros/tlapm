@@ -39,7 +39,7 @@ let toolbox_print ob ?(temp=false) status prover meth timeout already print_ob
                                             ~temp:temp ob.obl.core);
           Format.fprintf ff "@]@.";
           Some (warnings ^ Buffer.contents buf)
-      | _ -> None
+      | _ -> if !Params.toolbox_compact then Some warnings else None
     in
     let times =
       if timeout = 0.
@@ -177,9 +177,11 @@ let got_eof = ref false
 
 let line_buf = System.make_line_buffer Unix.stdin
 
+let accepts_commands () = !Params.toolbox && not !got_eof
+
 (* Read standard input and update the [stopped] and [killed] variables. *)
 let read_stdin () =
-  if !Params.toolbox && not !got_eof then begin
+  if accepts_commands () then begin
     match Unix.select [Unix.stdin] [] [] 0.0 with
     | ([], _, _) -> ()
     | _ ->

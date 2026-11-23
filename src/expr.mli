@@ -818,7 +818,11 @@ end
 module Anon: sig
     open T
     val hyp_is_named: string -> hyp -> bool
-    class anon: [string list] Visit.map
+    class anon: object
+      inherit [string list] Visit.map
+      method find_name : T.ctx -> string -> (int * T.hyp) option
+      method has_name : T.ctx -> string -> bool
+    end
     val anon: anon
 end
 

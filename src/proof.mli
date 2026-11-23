@@ -124,7 +124,11 @@ module Simplify : sig
 end
 
 module Anon : sig
-  class anon : [string list] Visit.map
+  class anon : object
+    inherit [string list] Visit.map
+    method find_name : Expr.T.ctx -> string -> (int * Expr.T.hyp) option
+    method has_name : Expr.T.ctx -> string -> bool
+  end
   val anon : anon
 end
 

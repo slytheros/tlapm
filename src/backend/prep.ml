@@ -54,20 +54,17 @@ let expand_defs ?(what = fun _ -> true) ob =
      so prior inlinings are already substituted into it -- exactly as in the
      iterated version.  The resulting obligation is identical. *)
   let sq = ob.obl.core in
-  let rec fold s kept cx = match Deque.front cx with
-    | None -> (s, kept)
-    | Some (h, hs) ->
-        let h = app_sub app_hyp s h in
-        begin match h.core with
-          | Defn ({core = Operator (_, e)}, wd, Visible, _) when what wd ->
-              fold (scons_sub e s) kept hs
-          | Defn ({core = Bpragma (_, e, _)}, wd, _, _) when what wd ->
-              fold (scons_sub e s) kept hs
-          | _ ->
-              fold (Option.map bump s) (Deque.snoc kept h) hs
-        end
+  let fold (s, kept) h =
+    let h = app_sub app_hyp s h in
+    match h.core with
+    | Defn ({core = Operator (_, e)}, wd, Visible, _)
+    | Defn ({core = Bpragma (_, e, _)}, wd, _, _) when what wd ->
+        (scons_sub e s, kept)
+    | _ ->
+        (Option.map bump s, h :: kept)
   in
-  let (s, context) = fold None Deque.empty sq.context in
+  let (s, kept) = Deque.fold_left fold (None, []) sq.context in
+  let context = Deque.rev (Deque.of_list kept) in
   let active = app_sub app_expr s sq.active in
   { ob with obl = { ob.obl with core = { context ; active } } }
 
@@ -423,8 +420,9 @@ let cleanup =
 
 let mk_timec ob org_ob warnings timeout (prover, tac) =
   fun () ->
-    Toolbox.toolbox_print (Lazy.force org_ob) "being proved" prover tac timeout None true None
-                          warnings None;
+    let print_ob = not !Params.toolbox_compact || !Params.printallobs in
+    Toolbox.toolbox_print (Lazy.force org_ob) "being proved" prover tac timeout None
+                          print_ob None warnings None;
     Schedule.Continue ((fun () -> Schedule.Timeout), timeout)
 
 
@@ -669,7 +667,8 @@ let print_obl_and_msg
     *)
     (* Trivial obligation ?  (for example, a proof directive) *)
     if (((Internal TRUE) <> ob.obl.core.active.core)
-        && !Params.verbose) then
+        && !Params.verbose
+        && (not !Params.toolbox_compact || !Params.printallobs)) then
     begin
         log_info msg;
         print_obligation ob
@@ -1669,30 +1668,34 @@ let find_meth ob =
      { ob with obl = obl }
 
 
+let measure clock f x =
+  if !Params.stats then Timing.measure clock f x else f x
+
 let really_ship ob org_ob meth fpout thyout record =
-  if !Params.printallobs then begin
+  if !Params.printallobs || !Params.toolbox_compact then begin
     let tt = match meth with
     | Method.LS4 _ -> true
     | _ -> false in
     (* FIXME "normalized" not allowed in protocol (?) *)
     Toolbox.toolbox_print (Lazy.force org_ob) ~temp:tt "normalized" None None
-                          (Method.timeout meth) None true None "" None;
+                          (Method.timeout meth) None !Params.printallobs None "" None;
   end;
   if !Params.noproving then
     Schedule.Immediate false
   else begin
-    let ob = Lazy.force ob in
-    let ob = if !Params.ob_flatten then flatten ob else ob in
-    let save log proof res =
-      let r = {
-        Types.final_form = ob;
-        Types.log = [log];
-        Types.proof = proof;
-        Types.results = [res];
-      } in
-      save_result fpout thyout record r
-    in
-    prove_with ob org_ob meth save
+    measure Timing.encoding (fun () ->
+      let ob = Lazy.force ob in
+      let ob = if !Params.ob_flatten then flatten ob else ob in
+      let save log proof res =
+        let r = {
+          Types.final_form = ob;
+          Types.log = [log];
+          Types.proof = proof;
+          Types.results = [res];
+        } in
+        save_result fpout thyout record r
+      in
+      prove_with ob org_ob meth save) ()
   end
 
 
@@ -1727,7 +1730,7 @@ let ship ob fpout thyout record =
           (Util.location ~cap:false ob.obl);
   begin try
     print_obl_and_msg ob "Proof obligation before `find_meth`:\n";
-    let ob = find_meth ob in
+    let ob = measure Timing.preparation find_meth ob in
     print_obl_and_msg ob "Proof obligation after `find_meth`:\n";
     Toolbox.print_ob_provers ob;
     let meths = get ob.obl Proof.T.Props.meth in
@@ -1764,17 +1767,26 @@ let ship ob fpout thyout record =
         proof directives.
         *)
     let const_fp_ob =
-      lazy (Fingerprints.write_fingerprint (add_constness ob))
+      lazy (measure Timing.preparation
+              (fun ob -> Fingerprints.write_fingerprint (add_constness ob)) ob)
     in
-    let p = lazy (normalize_expand (Lazy.force const_fp_ob)
+    let p = lazy (
+        let ob = Lazy.force const_fp_ob in
+        measure Timing.preparation (fun ob -> normalize_expand ob
             fpout thyout record
             ~expand_enabled
             ~expand_cdot
             ~autouse
             ~apply_lambdify
             ~enabled_axioms
-            ~level_comparison)
+            ~level_comparison) ob)
     in
+    let action_ob = lazy (
+        let ob, _ = Lazy.force p in
+        measure Timing.preparation Action.process_obligation ob) in
+    let temporal_ob = lazy (
+        let ob, _ = Lazy.force p in
+        measure Timing.preparation Pltl.process_obligation ob) in
     let prep_meth m =
       let ob = Lazy.force const_fp_ob in
       let m = Method.scale_time m !Params.timeout_stretch in
@@ -1820,9 +1832,9 @@ let ship ob fpout thyout record =
         (* Other support goals may only become trivial after expansion. *)
         let trivial_ob =
             try
-                lazy (trivial (Lazy.force normalize_expand_ob))
+                lazy (measure Timing.preparation trivial (Lazy.force normalize_expand_ob))
             with Failure msg ->
-                lazy (trivial (Lazy.force const_fp_ob))
+                lazy (measure Timing.preparation trivial (Lazy.force const_fp_ob))
             in
         let result = begin
             try
@@ -1864,12 +1876,8 @@ let ship ob fpout thyout record =
              match meth with
              (* The obligations sent to FOL backends are normalized using the
               * action frontend by default *)
-             | Method.LS4 _ ->
-                 lazy (Pltl.process_obligation
-                           (Lazy.force normalize_expand_ob))
-             | _ ->
-                 lazy (Action.process_obligation
-                           (Lazy.force normalize_expand_ob))
+             | Method.LS4 _ -> temporal_ob
+             | _ -> action_ob
            in
            let tmo = !Params.backend_timeout *. !Params.timeout_stretch in
            print_obl_and_msg

@@ -38,6 +38,16 @@ val new_clock: string -> clock
     both counters at 0. Do not start the new clock, do not change the
     running clock. *)
 
+val preparation : clock
+val encoding : clock
+val prover : clock
+
+val record : clock -> float -> unit
+(** Accumulate elapsed time independently of the active phase clock. *)
+
+val measure : clock -> ('a -> 'b) -> 'a -> 'b
+(** Accumulate a call's elapsed time, including calls that raise. *)
+
 val total: string -> clock
 (** [total desc]
     Create a new clock with description [desc], time initialized to

@@ -212,12 +212,13 @@ and app_sequent s sq =
   let (s, cx) = app_hyps s sq.context in
   { context = cx ; active = app_expr s sq.active }
 
-and app_hyps s cs = match Deque.front cs with
-  | None -> (s, Deque.empty)
-  | Some (c, cs) ->
-      let c = app_hyp s c in
-      let (s, cs) = app_hyps (bump s) cs in
-      (s, Deque.cons c cs)
+and app_hyps s cs =
+  let step (s, hyps) hyp =
+    let hyp = app_hyp s hyp in
+    (bump s, hyp :: hyps)
+  in
+  let (s, reversed) = Deque.fold_left step (s, []) cs in
+  (s, Deque.of_list (List.rev reversed))
 
 and app_hyp s h = match h.core with
   | Fresh (x, shp, lv, b) -> Fresh (x, shp, lv, app_dom s b) @@ h

@@ -205,8 +205,8 @@ let complete_with_statement_params
     StringSet.fold f module_parameters substitution_map
 
 
-let anonymize_substitution anon cx subst =
-    HintMap.map (anon#expr ([], cx)) subst
+let anonymize_substitution anon mcx cx subst =
+    HintMap.map (anon#mexpr mcx ([], cx)) subst
 
 
 let remove_pf mu =
@@ -516,7 +516,7 @@ let instantiate
     let subst = complete_with_statement_params
                     instance substitution_map
                     module_parameters cx in
-    let subst = anonymize_substitution anon cx subst in
+    let subst = anonymize_substitution anon mcx cx subst in
     (* bring mule body to here *)
     let cx_shift = Deque.size cx - tla_module.core.defdepth in
     assert (cx_shift >= 0);
@@ -542,7 +542,7 @@ let instantiate
 de Bruijn indices).
 *)
 
-let anon = object (self : 'self)
+class module_anon = object (self : 'self)
   inherit Proof.Anon.anon as super
 
   val mutable __mcx : modctx = StringMap.empty
@@ -550,6 +550,10 @@ let anon = object (self : 'self)
   method mexpr mcx scx e =
     __mcx <- mcx ;
     self#expr scx e
+
+  method mdefn mcx scx df =
+    __mcx <- mcx ;
+    self#defn scx df
 
   method mproof mcx scx prf =
     __mcx <- mcx ;
@@ -1068,6 +1072,7 @@ let assert_module_exists name mcx mu =
 
 (* is_anon = false => not yet anonymised *)
 let rec normalize mcx cx m =
+  let anon = new module_anon in
   let origbody = m.core.body in
   let prefix = ref Deque.empty in
   let emit mu = prefix := Deque.snoc !prefix mu in
@@ -1099,9 +1104,7 @@ let rec normalize mcx cx m =
             object inherit Expr.Constness.const_visitor end in
         let redundant nm = match nm with
             | None -> false
-            | Some nm ->
-                let what = Expr.Anon.hyp_is_named nm.core in
-                Deque.find cx what != None
+            | Some nm -> anon#has_name cx nm.core
         in
         let map_proof cx nm sq pf mu m = begin
         (* add a definition for the theorem if it is named,
@@ -1182,13 +1185,12 @@ let rec normalize mcx cx m =
             (* treat pragma definitions as usual operator definitions *)
         | Definition ({core = Bpragma (nm, _, _)} as df, wd, vis, ex) ->
           begin
-            let df = if is_anon then df else anon#defn ([], cx) df in
+            let df = if is_anon then df else anon#mdefn mcx ([], cx) df in
             let df = const_visitor#defn ((), cx) df in
             let mu = Definition (df, wd, vis, ex) @@ mu in
             (* merge identical operator definitions *)
             let h = Defn (df, wd, vis, ex) @@ mu in
-            match Deque.find ~backwards:true cx
-                             (Expr.Anon.hyp_is_named nm.core) with
+            match anon#find_name cx nm.core with
             | Some (x, ({core = Defn (d, _, _, _)} as oh)) ->
                 let oh = app_hyp (shift (x + 1)) oh in
                 let eq =

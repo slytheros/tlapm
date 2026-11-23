@@ -94,7 +94,7 @@ let prepend_list l q =
       front = l @ q.front ;
       flen = q.flen + n }
 
-let rec nth ?(backwards=false) q n =
+let nth ?(backwards=false) q n =
   (* Return item `n` from `q`.
 
   Define `m == (size q) - 1`.
@@ -109,17 +109,12 @@ let rec nth ?(backwards=false) q n =
 
     m, m - 1, ..., 0
   *)
-  if backwards then nth (rev q) n
+  if n < 0 then failwith "Deque.nth: internal error"
   else if n >= size q then None
   else
-    let rec git q n =
-      match front q with
-        | Some (x, q) ->
-            if n = 0 then Some x else git q (n - 1)
-        | None ->
-            failwith "Deque.nth: internal error"
-    in
-    git q n
+    let index = if backwards then size q - n - 1 else n in
+    if index < q.flen then Stdlib.List.nth_opt q.front index
+    else Stdlib.List.nth_opt q.rear (size q - index - 1)
 
 let first_n q n =
     let length = size q in
@@ -145,38 +140,34 @@ let first_n q n =
         in
         { empty with front = take n q.front; flen = n }
 
-let map f q =
-  let rec go n q r = match front q with
-    | None -> r
-    | Some (x, q) ->
-        go (n + 1) q (snoc r (f n x))
-  in
-  go 0 q empty
-
 let iter f q =
-  let rec go n q = match front q with
-    | None -> ()
-    | Some (x, q) ->
-        f n x ;
-        go (n + 1) q
+  let rec go n xs tail = match xs with
+    | [] ->
+        if tail <> [] then go n (List.rev tail) []
+    | x :: xs ->
+        f n x;
+        go (n + 1) xs tail
   in
-  go 0 q
+  go 0 q.front q.rear
 
-let rec fold_left fn acc q = match front q with
-  | None -> acc
-  | Some (f, q) -> fold_left fn (fn acc f) q
+let map f q =
+  let rear = ref [] in
+  iter (fun n x -> rear := f n x :: !rear) q;
+  { empty with rear = !rear; rlen = size q }
 
-let rec fold_right fn q acc = match rear q with
-  | None -> acc
-  | Some (q, r) -> fold_right fn q (fn r acc)
+let fold_left fn acc q =
+  let acc = List.fold_left fn acc q.front in
+  List.fold_left fn acc (List.rev q.rear)
+
+let fold_right fn q acc =
+  let step acc x = fn x acc in
+  let acc = List.fold_left step acc q.rear in
+  List.fold_left step acc (List.rev q.front)
 
 let to_list q =
-  let rec go l q = match rear q with
-    | None -> l
-    | Some (q, x) ->
-        go (x :: l) q
-  in
-  go [] q
+  match q.rear with
+  | [] -> q.front
+  | rear -> List.rev_append (List.rev q.front) (List.rev rear)
 
 let find ?(backwards=false) q test =
   let rec spin k f r = match f with
@@ -192,6 +183,19 @@ let find ?(backwards=false) q test =
     spin 0 q.rear q.front
   else
     spin 0 q.front q.rear
+
+let shared_prefix_length q r =
+  if q.front != r.front then 0
+  else
+    let rec align left left_len right right_len =
+      if left_len > right_len then
+        align (List.tl left) (left_len - 1) right right_len
+      else if right_len > left_len then
+        align left left_len (List.tl right) (right_len - 1)
+      else if left == right then q.flen + left_len
+      else align (List.tl left) (left_len - 1) (List.tl right) (right_len - 1)
+    in
+    align q.rear q.rlen r.rear r.rlen
 
 let alter ?(backwards=false) q n alt_fn =
   let n = if backwards then size q - n - 1 else n in
@@ -234,3 +238,17 @@ let%test "first_n preserves order across the front and rear lists" =
   in
   check 0 [] && check 1 [1] && check 2 [1; 2] &&
   check 3 [1; 2; 3] && check 4 [1; 2; 3; 4]
+
+let%test_unit "indexing and traversal preserve mixed deque order" =
+  let q = snoc (snoc (of_list [1; 2]) 3) 4 in
+  let values = [1; 2; 3; 4] in
+  let some x = Some x in
+  assert (List.init 4 (nth q) = List.map some values);
+  assert (List.init 4 (nth ~backwards:true q) = List.map some (List.rev values));
+  assert (nth q 4 = None);
+  assert (fold_left (fun xs x -> x :: xs) [] q = List.rev values);
+  assert (fold_right (fun x xs -> x :: xs) q [] = values);
+  let visited = ref [] in
+  let mapped = map (fun i x -> visited := i :: !visited; x + i) q in
+  assert (!visited = [3; 2; 1; 0]);
+  assert (to_list mapped = [1; 3; 5; 7])
